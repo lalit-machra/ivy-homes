@@ -1,0 +1,69 @@
+{
+    "api_key": "IVY26-XXXXXXXXXXXX",
+    "candidate": {
+      "name": "",
+      "email": "",
+      "repo_url": "",
+      "demo_url": ""
+    },
+    "answers": {
+      "total_listing_records": 0,
+      "unique_properties": 0,
+      "active_listings": 0,
+      "corrupt_listing_ids": [],
+      "total_monthly_rent": 0,
+      "avg_price_per_sqft_2bhk": 0.0,
+      "costliest_project": { "project_id": "", "price_max_inr": 0 },
+      "listings_last_7_days": 0,
+      "fake_listing_ids": [],
+      "projects_with_wrong_listing_count": 0
+    },
+    "findings": [
+      {
+        "endpoint": "/auth/login",
+        "category": "auth",
+        "documented": "response contains a single field 'token'",
+        "actual": "response contains 'access_token' not 'token'",
+        "how_found": "logged in via Postman and inspected the raw response body",
+        "impact": "frontend code written against the documented field name will fail to store the token at all",
+        "evidence": []
+      },
+      {
+        "endpoint": "/auth/login",
+        "category": "auth",
+        "documented": "Tokens are valid for 24 hours",
+        "actual": "Response contains `expires_in: 900`, indicating a 15-minute access-token lifetime",
+        "how_found": "logged in via Postman and inspected the raw response body",
+        "impact": "a frontend built on a 24h single-login assumption will silently drop the session after 15 minutes",
+        "evidence": []
+      },
+      {
+        "endpoint": "/auth/refresh",
+        "category": "undocumented_endpoint",
+        "documented": "not mentioned anywhere in the reference",
+        "actual": "exists and is required to keep a session alive past 15 minutes",
+        "how_found": "found 'refresh_url' in the /auth/login response body",
+        "impact": "without using this, no frontend can satisfy the 30-minute session requirement",
+        "evidence": []
+      },
+      {
+        "endpoint": "/auth/login",
+        "category": "completeness",
+        "documented": "user object contains email and name",
+        "actual": "user object contains only email",
+        "how_found": "logged in via Postman and inspected the raw response body",
+        "impact": "minor — any UI relying on a display name from login response has nothing to show",
+        "evidence": []
+      },
+      {
+        "endpoint": "/auth/logout/",
+        "category": "auth",
+        "documented": "Invalidates the current token server side",
+        "actual": "After logging out, the previously issued access token was still accepted by `GET /v1/listings`",
+        "how_found": "First called `POST /auth/logout/` then then requested `GET /v1/listings` using the same access token in Postman, received 200 OK response",
+        "impact": "a user who logs out on a shared/public device is not actually signed out — anyone with the old token retains full access until natural expiry (15 min)",
+        "evidence": []
+      }
+    ]
+}
+  
