@@ -104,7 +104,7 @@
         ]
       },
       {
-        "endpoint": "/v1/listings",
+        "endpoint": "/v1/listings, /v1/rentals, /v1/projects",
         "category": "pagination",
         "documented": "page parameter, 1-indexed, controls which page of results is returned",
         "actual": "page parameter has no effect; pagination is controlled by offset, not page",
@@ -113,7 +113,7 @@
         "evidence": []
       },
       {
-        "endpoint": "/v1/listings",
+        "endpoint": "/v1/listings, /v1/rentals, /v1/projects",
         "category": "pagination",
         "documented": "limit parameter, maximum 200",
         "actual": "requesting with limit > 50 returns only 50 records per page; the actual maximum is 50",
@@ -122,10 +122,10 @@
         "evidence": []
       },
       {
-        "endpoint": "/v1/listings",
+        "endpoint": "/v1/listings, /v1/rentals",
         "category": "pagination",
         "documented": "'total' is the exact number of records matching your filters; to fetch every record, divide total by limit and request that many pages",
-        "actual": "'total' under-reports the real record count (no filter - 3391 reported listings vs 3500 actually retrievable listings) — the documented method for fetching all records does not work",
+        "actual": "'total' under-reports the real record count (no filter - 3391 reported vs 3500 actually retrievable) — the documented method for fetching all records does not work",
         "how_found": "paginated using offset past the point implied by total/limit and found has_more still true",
         "impact": "a client following the documented method would compute the wrong number of pages using a parameter that does nothing, and would stop short of the real dataset; has_more is the only reliable way to know pagination is complete",
         "evidence": []
@@ -158,7 +158,7 @@
         "evidence": []
       },
       {
-        "endpoint": "/v1/listings",
+        "endpoint": "/v1/listings, /v1/rentals",
         "category": "sorting",
         "documented": "sort_by=posted_at sorts listings by posting date",
         "actual": "posted_at sorting is mostly correct (oldest to newest) but unreliable — a subset of records appear out of chronological sequence, regardless of the order parameter",
@@ -167,7 +167,7 @@
         "evidence": []
       },
       {
-        "endpoint": "/v1/listings",
+        "endpoint": "/v1/listings, /v1/rentals, /v1/projects",
         "category": "sorting",
         "documented": "order parameter controls ascending (asc, default) or descending (desc) sort direction",
         "actual": "order has no effect — results are always returned in ascending order regardless of the value passed",
@@ -185,12 +185,57 @@
         "evidence": []
       },
       {
-        "endpoint": "/v1/listings",
+        "endpoint": "/v1/listings, /v1/rentals",
         "category": "consistency",
         "documented": "the projects endpoint states total_listings 'always agrees with what GET /v1/listings?project_id=... returns'",
         "actual": "project_id has no effect as a query filter on /v1/listings — the request the projects documentation references does not actually filter results",
         "how_found": "requested /v1/listings?project_id=<id> via Postman and compared results to an unfiltered request; also confirmed the same project_id resolves correctly via GET /v1/projects/{project_id}, ruling out an invalid ID as the cause",
         "impact": "the documented method for verifying total_listings does not work; total_listings must instead be checked by counting listings per project_id client-side against the full pulled dataset",
+        "evidence": []
+      },
+      {
+        "endpoint": "/v1/rentals",
+        "category": "completeness",
+        "documented": "rental object fields do not include is_live",
+        "actual": "is_live is present on rental records, same as on listings",
+        "how_found": "inspected rental objects in the full pulled dataset",
+        "impact": "an insights or filtering feature that should exclude inactive rentals cannot rely on documentation and must check is_live directly",
+        "evidence": []
+      },
+      {
+        "endpoint": "/v1/projects",
+        "category": "units",
+        "documented": "`price_min` and `price_max` are INR",
+        "actual": "`price_min` and `price_max` are returned as crore-denominated values rather than INR amounts; for example, `1.66` and `4.54` correspond to ₹1.66 Cr and ₹4.54 Cr.",
+        "how_found": "Inspected project records returned by `GET /v1/projects` in Postman and compared the documented INR unit with the returned price magnitudes.",
+        "impact": "The frontend must convert project prices from crores to INR when displaying or comparing them with INR-denominated listing prices.",
+        "evidence": ["P60001", "P60002", "P60003", "P60006", "P60007", "P60008", "P600011", "P600012", "P600017", "P600019", "P600020"]
+      },
+      {
+        "endpoint": "/v1/projects",
+        "category": "data_quality",
+        "documented": "price_min and price_max represent a valid price range for the project",
+        "actual": "some records have price_min greater than price_max (e.g. min: 88.2, max: 2.4), which is internally impossible regardless of unit",
+        "how_found": "inspected price_min/price_max values in the pulled projects dataset and found records where min exceeds max",
+        "impact": "these records cannot be trusted for range-based calculations; Q7 (costliest project) must account for or exclude these before taking a maximum",
+        "evidence": ["P60004", "P60005", "P60009", "P600010", "P600013", "P600014", "P600015", "P600016", "P600018"]
+      },
+      {
+        "endpoint": "/v1/favourites",
+        "category": "missing_endpoint",
+        "documented": "GET, POST, and DELETE /v1/favourites — save, list, and remove favourited listings",
+        "actual": "all three methods return 404 not found",
+        "how_found": "called GET, POST, and DELETE on /v1/favourites via Postman with valid auth, all returned 404",
+        "impact": "the documented favourites feature does not exist at all; the frontend's required saved-listings feature (Part 1) cannot be built against this endpoint.",
+        "evidence": []
+      },
+      {
+        "endpoint": "/v1/analytics/summary",
+        "category": "missing_endpoint",
+        "documented": "returns pre-computed aggregates for your city — total_listings, median_price, median_price_per_sqft, by_locality, by_bhk",
+        "actual": "returns 404 not found",
+        "how_found": "called /v1/analytics/summary via Postman with valid auth and received 404",
+        "impact": "the insights screen (Part 1, requirement 6) cannot be built from this endpoint at all; every aggregate documented here must be computed client-side from the full retrieved dataset instead",
         "evidence": []
       }
     ]

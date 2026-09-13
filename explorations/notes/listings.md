@@ -27,5 +27,6 @@ Postman
 - offset-based pagination works correctly — no overlaps or gaps between consecutive pages
 - `bhk` correctly filters with number of bedrooms.
 - `property_type` filter is accurate — sum of counts per documented type (apartment, villa, independent house, plot,   builder floor) equals the full dataset total (3500), confirming no missing/unexpected property_type values exist.
+- `sort_by` works correctly for `price`, `carpet_area`, and `bedroom`
 - `GET /v1/listing/{listing_id}` works as expected returning a single listing only.
 - field conventions on listing object — money (rupees, int), area (sqft, int), timestamps (ISO 8601, Z suffix) all match documented conventions; no missing or renamed fields in a sample check.
