@@ -63,6 +63,135 @@
         "how_found": "First called `POST /auth/logout/` then then requested `GET /v1/listings` using the same access token in Postman, received 200 OK response",
         "impact": "a user who logs out on a shared/public device is not actually signed out — anyone with the old token retains full access until natural expiry (15 min)",
         "evidence": []
+      },
+      {
+        "endpoint": "/auth/refresh",
+        "category": "auth",
+        "documented": "not documented — the reference claims no refresh flow exists",
+        "actual": "calling /auth/refresh issues a new access_token and refresh_token, but the previous refresh_token remains usable afterward rather than being invalidated",
+        "how_found": "called /auth/refresh twice using the original refresh_token both times and received valid new tokens on the second call",
+        "impact": "refresh tokens are never actually revoked through normal use; a leaked or old refresh_token remains valid indefinitely, since neither refresh nor logout invalidate it",
+        "evidence": []
+      },
+      {
+        "endpoint": "/v1/listings",
+        "category": "auth",
+        "documented": "Append API key as a query parameter: ?api_key=...",
+        "actual": "query parameter auth does not work at all; the server rejects it with a 401 and an explicit error message directing the client to send the key via the X-API-Key header instead",
+        "how_found": "sent a request using only ?api_key= with no header and received a 401 with detail explaining the header is required",
+        "impact": "the documented auth method is completely non-functional; any client built strictly to the documentation cannot authenticate at all",
+        "evidence": []
+      },
+      {
+        "endpoint": "/v1/listings",
+        "category": "pagination",
+        "documented": "Collection responses contain 'total', 'page', 'page_size' and 'results'",
+        "actual": "The responses contain 'limit', 'offset', 'count', 'total', 'has_more', and 'results'.",
+        "how_found": "Called 'GET /v1/listings' without filters through Postman.",
+        "impact": "The frontend must use the API's offset-based pagination contract rather than the documented page-based contract.",
+        "evidence": []
+      },
+      {
+        "endpoint": "/v1/listings",
+        "category": "completeness",
+        "documented": "returns only active listings in your city; inactive, expired and withdrawn listings are excluded server-side and anything returned is safe to show to a user",
+        "actual": "returned records include 'is_live': 'false' listings, meaning inactive/non-live listings are not filtered out server-side",
+        "how_found": "inspected 'is_live' field across returned listing records and found false values present",
+        "impact": "a frontend trusting the doc's claim would display inactive listings to users as if they were live; client-side filtering on 'is_live' is required",
+        "evidence": [
+          "SQU-6001937", "DWE-6002796", "MAG-6000794", "SQU-6003155", "DWE-6002689", "DWE-6002177",
+          "SQU-6000737", "SQU-6000987", "SQU-6003155"
+        ]
+      },
+      {
+        "endpoint": "/v1/listings",
+        "category": "pagination",
+        "documented": "page parameter, 1-indexed, controls which page of results is returned",
+        "actual": "page parameter has no effect; pagination is controlled by offset, not page",
+        "how_found": "sent requests with different page values while holding other parameters constant and observed no change in returned results",
+        "impact": "a client built to paginate using page per the documentation would receive the same page of results repeatedly and never reach the end of the dataset",
+        "evidence": []
+      },
+      {
+        "endpoint": "/v1/listings",
+        "category": "pagination",
+        "documented": "limit parameter, maximum 200",
+        "actual": "requesting with limit > 50 returns only 50 records per page; the actual maximum is 50",
+        "how_found": "requested limit=200, limit=100 and response returned with 'limit': 50",
+        "impact": "a client assuming it can pull up to 200 records per page will under-fetch and require more requests than expected; bulk pagination must account for the real cap of 50",
+        "evidence": []
+      },
+      {
+        "endpoint": "/v1/listings",
+        "category": "pagination",
+        "documented": "'total' is the exact number of records matching your filters; to fetch every record, divide total by limit and request that many pages",
+        "actual": "'total' under-reports the real record count (no filter - 3391 reported listings vs 3500 actually retrievable listings) — the documented method for fetching all records does not work",
+        "how_found": "paginated using offset past the point implied by total/limit and found has_more still true",
+        "impact": "a client following the documented method would compute the wrong number of pages using a parameter that does nothing, and would stop short of the real dataset; has_more is the only reliable way to know pagination is complete",
+        "evidence": []
+      },
+      {
+        "endpoint": "/v1/listings",
+        "category": "filters",
+        "documented": "locality parameter must be an exact match, lowercase",
+        "actual": "locality matching is case-insensitive — 'sector 82', 'Sector 82', and 'SecTor 82' all return identical results",
+        "how_found": "sent the same locality value in three different casings and compared results",
+        "impact": "minor — the documented lowercase restriction is stricter than actual behavior; a frontend does not need to normalize casing before sending the locality filter",
+        "evidence": []
+      },
+      {
+        "endpoint": "/v1/listings",
+        "category": "filters",
+        "documented": "min_price and max_price filter listings by a price range, inclusive",
+        "actual": "neither min_price nor max_price has any effect on results — tested both at extreme low and high values with no change in the returned listings",
+        "how_found": "applied min_price and max_price independently at extreme values (150 and 150000000) and compared result sets, which were identical to unfiltered results in every case",
+        "impact": "price-range filtering does not work server-side at all; the frontend's price filter (a hard requirement) must be implemented entirely client-side against the full retrieved dataset",
+        "evidence": []
+      },
+      {
+        "endpoint": "/v1/listings",
+        "category": "filters",
+        "documented": "furnishing filters listings by furnishing status: unfurnished, semi-furnished, fully-furnished",
+        "actual": "furnishing has no effect on results — tested all three documented values, response unchanged in every case",
+        "how_found": "tested each documented furnishing value independently via Postman and compared result sets, which were identical",
+        "impact": "furnishing filtering does not work server-side; must be implemented client-side, consistent with the same gap already found in min_price and max_price",
+        "evidence": []
+      },
+      {
+        "endpoint": "/v1/listings",
+        "category": "sorting",
+        "documented": "sort_by=posted_at sorts listings by posting date",
+        "actual": "posted_at sorting is mostly correct (oldest to newest) but unreliable — a subset of records appear out of chronological sequence, regardless of the order parameter",
+        "how_found": "requested sort_by=posted_at via Postman and inspected posted_at values across the result set, finding most records in correct chronological order but some out of place",
+        "impact": "a listings screen cannot fully trust server-side date sorting; sorting by posted_at should be done client-side against the full dataset to guarantee correctness",
+        "evidence": []
+      },
+      {
+        "endpoint": "/v1/listings",
+        "category": "sorting",
+        "documented": "order parameter controls ascending (asc, default) or descending (desc) sort direction",
+        "actual": "order has no effect — results are always returned in ascending order regardless of the value passed",
+        "how_found": "tested sort_by with both asc and desc order values via Postman and compared result sets, which were identical",
+        "impact": "descending sort is unavailable server-side for any field; must be implemented client-side after fetching data",
+        "evidence": []
+      },
+      {
+        "endpoint": "/v1/listings/{id}/similar",
+        "category": "missing_endpoint",
+        "documented": "returns up to ten comparable listings — same locality, same bedroom count, price within 15%",
+        "actual": "returns 404 not found",
+        "how_found": "requested the endpoint with a valid listing_id via Postman and received a 404",
+        "impact": "the 'you may also like' feature suggested for the listing detail page cannot be built using this endpoint",
+        "evidence": []
+      },
+      {
+        "endpoint": "/v1/listings",
+        "category": "consistency",
+        "documented": "the projects endpoint states total_listings 'always agrees with what GET /v1/listings?project_id=... returns'",
+        "actual": "project_id has no effect as a query filter on /v1/listings — the request the projects documentation references does not actually filter results",
+        "how_found": "requested /v1/listings?project_id=<id> via Postman and compared results to an unfiltered request; also confirmed the same project_id resolves correctly via GET /v1/projects/{project_id}, ruling out an invalid ID as the cause",
+        "impact": "the documented method for verifying total_listings does not work; total_listings must instead be checked by counting listings per project_id client-side against the full pulled dataset",
+        "evidence": []
       }
     ]
 }
