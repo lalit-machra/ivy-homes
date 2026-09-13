@@ -7,16 +7,16 @@
       "demo_url": ""
     },
     "answers": {
-      "total_listing_records": 0,
+      "total_listing_records": 3500,
       "unique_properties": 0,
-      "active_listings": 0,
+      "active_listings": 2792,
       "corrupt_listing_ids": [],
-      "total_monthly_rent": 0,
+      "total_monthly_rent": 5457800,
       "avg_price_per_sqft_2bhk": 0.0,
-      "costliest_project": { "project_id": "", "price_max_inr": 0 },
-      "listings_last_7_days": 0,
+      "costliest_project": { "project_id": "P60060", "price_max_inr": 58300000 },
+      "listings_last_7_days": 129,
       "fake_listing_ids": [],
-      "projects_with_wrong_listing_count": 0
+      "projects_with_wrong_listing_count": 295
     },
     "findings": [
       {
@@ -205,20 +205,20 @@
       {
         "endpoint": "/v1/projects",
         "category": "units",
-        "documented": "`price_min` and `price_max` are INR",
-        "actual": "`price_min` and `price_max` are returned as crore-denominated values rather than INR amounts; for example, `1.66` and `4.54` correspond to ₹1.66 Cr and ₹4.54 Cr.",
-        "how_found": "Inspected project records returned by `GET /v1/projects` in Postman and compared the documented INR unit with the returned price magnitudes.",
-        "impact": "The frontend must convert project prices from crores to INR when displaying or comparing them with INR-denominated listing prices.",
-        "evidence": ["P60001", "P60002", "P60003", "P60006", "P60007", "P60008", "P600011", "P600012", "P600017", "P600019", "P600020"]
+        "documented": "price_min and price_max are in rupees",
+        "actual": "neither field is in raw rupees. Most projects have both fields in crores; a separate group has price_min in lakhs and price_max in crores.",
+        "how_found": "compared price_min/price_max under multiple unit conversions (lakhs, crores) against average real listing prices per project_id across a sample spanning the full value range",
+        "impact": "any calculation using these fields (e.g. costliest_project, Q7) must apply the correct per-record conversion based on which pattern the record matches, not a single fixed factor",
+        "evidence": ["P60060", "id P60227", "P60231", "P60372", "P60229"]
       },
       {
         "endpoint": "/v1/projects",
         "category": "data_quality",
-        "documented": "price_min and price_max represent a valid price range for the project",
-        "actual": "some records have price_min greater than price_max (e.g. min: 88.2, max: 2.4), which is internally impossible regardless of unit",
-        "how_found": "inspected price_min/price_max values in the pulled projects dataset and found records where min exceeds max",
-        "impact": "these records cannot be trusted for range-based calculations; Q7 (costliest project) must account for or exclude these before taking a maximum",
-        "evidence": ["P60004", "P60005", "P60009", "P600010", "P600013", "P600014", "P600015", "P600016", "P600018"]
+        "documented": "price_min and price_max are in rupees",
+        "actual": "3 projects (P60090, P60179, P60273) have price_min and price_max values that don't fit any tested unit conversion (crores, lakhs, or a mix) against their own linked listings' actual prices — average listing price falls outside the range under every conversion tried",
+        "how_found": "converted price_min/price_max under multiple unit hypotheses and compared against the average real listing price for each project_id, isolating these 3 as inconsistent under all of them while ~400 other projects fit one of two clear patterns",
+        "impact": "these 3 projects' price data cannot be trusted under any unit assumption; excluded from costliest_project (Q7) calculation",
+        "evidence": ["P60090", "P60179", "P60273"]
       },
       {
         "endpoint": "/v1/favourites",
